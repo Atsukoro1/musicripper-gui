@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "build-frontend": "cd frontend && npm install && npm run build && rm -rf ../public && mkdir ../public && cp -r dist/* ../public/",
+    "build-frontend": "if [ -d \"frontend\" ]; then cd frontend && npm install && npm run build && rm -rf ../public && mkdir ../public && cp -r dist/* ../public/; else echo \"Frontend directory not found, skipping build\"; fi",
     "postinstall": "npm run build-frontend"
   },
   "dependencies": {
