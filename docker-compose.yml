@@ -2,15 +2,15 @@ version: '3.8'
 
 services:
   musicripper-gui:
-    build: .
+    image: musicripper-gui:latest
     ports:
       - "3000:3000"
     volumes:
       - ./downloads:/app/downloads
     environment:
+      - PORT=3000
       - NODE_ENV=production
-      # Configuration via environment variables:
-      # - PORT=3000
-      # - MUSICBRAINZ_USER_AGENT=CustomMusicRipper/1.0 (your-email@example.com)
-      # - DOWNLOAD_DIR=./downloads
-      # - ALLOWED_ORIGINS=http://localhost:3000,https://yourdomain.com
+      - MUSICBRAINZ_USER_AGENT=MusicRipper-GUI/1.0 (https://music-download.localbox.cz)
+      - DOWNLOAD_DIR=/app/downloads
+      - ALLOWED_ORIGINS=https://music-download.localbox.cz
+    restart: unless-stopped

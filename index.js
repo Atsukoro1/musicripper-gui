@@ -201,8 +201,10 @@ app.post('/api/download', async (req, res) => {
       return res.status(400).json({ error: 'URL is required' });
     }
     
-    // Create temporary directory
-    const tmpDir = await fs.mkdtemp('/tmp/musicripper-');
+    // Create temporary directory within downloads folder to avoid cross-device link errors
+    const downloadDir = path.join(__dirname, 'downloads');
+    await fs.mkdir(downloadDir, { recursive: true });
+    const tmpDir = await fs.mkdtemp(path.join(downloadDir, 'tmp-'));
     
     // Build yt-dlp arguments
     const args = [
@@ -260,7 +262,11 @@ app.post('/api/download', async (req, res) => {
         console.error('Download error:', error);
         // Clean up temp directory even on error
         try {
-          await fs.rm(tmpDir, { recursive: true, force: true });
+          const files = await fs.readdir(tmpDir);
+          for (const file of files) {
+            await fs.unlink(path.join(tmpDir, file));
+          }
+          await fs.rmdir(tmpDir);
         } catch (cleanupError) {
           console.error('Cleanup error:', cleanupError);
         }
@@ -304,16 +310,24 @@ app.post('/api/download', async (req, res) => {
           }
         }
         
-        // Move files to downloads directory
+        // Copy files to downloads directory (using copy + unlink to avoid cross-device link errors)
         const downloadDir = path.join(__dirname, 'downloads');
         await fs.mkdir(downloadDir, { recursive: true });
         
         for (const file of audioFiles) {
-          await fs.rename(
-            path.join(tmpDir, file),
-            path.join(downloadDir, file)
-          );
+          const srcPath = path.join(tmpDir, file);
+          const destPath = path.join(downloadDir, file);
+          // Copy file instead of rename to handle cross-device scenarios
+          await fs.copyFile(srcPath, destPath);
         }
+        
+        // Clean up temp directory and files
+        for (const file of audioFiles) {
+          // Remove temporary file
+          await fs.unlink(path.join(tmpDir, file));
+        }
+        // Remove temporary directory
+        await fs.rmdir(tmpDir);
         
         // Clean up temp directory
         await fs.rm(tmpDir, { recursive: true, force: true });
@@ -328,7 +342,11 @@ app.post('/api/download', async (req, res) => {
         console.error('File move error:', moveError);
         // Clean up temp directory even on error
         try {
-          await fs.rm(tmpDir, { recursive: true, force: true });
+          const files = await fs.readdir(tmpDir);
+          for (const file of files) {
+            await fs.unlink(path.join(tmpDir, file));
+          }
+          await fs.rmdir(tmpDir);
         } catch (cleanupError) {
           console.error('Cleanup error:', cleanupError);
         }
