@@ -50,5 +50,11 @@ RUN mkdir -p downloads
 # Expose port
 EXPOSE 3000
 
+# Application can be configured using environment variables:
+# - PORT: Port to run the application on (default: 3000)
+# - MUSICBRAINZ_USER_AGENT: User agent for MusicBrainz API requests
+# - DOWNLOAD_DIR: Directory to store downloaded files (default: ./downloads)
+# - ALLOWED_ORIGINS: Comma-separated list of allowed origins for CORS
+
 # Start the application
 CMD ["npm", "start"]

@@ -7,6 +7,10 @@ services:
       - "3000:3000"
     volumes:
       - ./downloads:/app/downloads
-      - ./config:/app/config
     environment:
       - NODE_ENV=production
+      # Configuration via environment variables:
+      # - PORT=3000
+      # - MUSICBRAINZ_USER_AGENT=CustomMusicRipper/1.0 (your-email@example.com)
+      # - DOWNLOAD_DIR=./downloads
+      # - ALLOWED_ORIGINS=http://localhost:3000,https://yourdomain.com

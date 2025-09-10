@@ -8,6 +8,16 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Configuration from environment variables
+const config = {
+  port: PORT,
+  musicbrainz: {
+    userAgent: process.env.MUSICBRAINZ_USER_AGENT || 'MusicRipper-GUI/1.0 ( https://github.com/your-username/musicripper-gui )'
+  },
+  downloadDir: process.env.DOWNLOAD_DIR || './downloads',
+  allowedOrigins: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []
+};
+
 // Middleware
 app.use(express.json());
 app.use(express.static('public'));

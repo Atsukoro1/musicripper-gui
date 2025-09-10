@@ -83,6 +83,21 @@ The application provides several configuration options for music downloading:
 - **Download Lyrics**: Download and embed song lyrics
 - **Custom Arguments**: Add any additional yt-dlp arguments
 
+### Environment Variables
+
+The application can be configured using environment variables:
+
+- `PORT`: Port to run the application on (default: 3000)
+- `MUSICBRAINZ_USER_AGENT`: User agent for MusicBrainz API requests (default: MusicRipper-GUI/1.0)
+- `DOWNLOAD_DIR`: Directory to store downloaded files (default: ./downloads)
+- `ALLOWED_ORIGINS`: Comma-separated list of allowed origins for CORS (optional)
+- `NODE_ENV`: Node environment (default: production)
+
+When running with Docker, you can set these variables in several ways:
+1. In the docker-compose.yml file under the `environment` section
+2. Using an `.env` file (copy `.env.example` to `.env` and modify as needed)
+3. When running docker run, use the `-e` flag for each variable
+
 ## Supported Platforms
 
 This application supports all platforms supported by yt-dlp, including:
