@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  musicripper-gui:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./downloads:/app/downloads
+      - ./config:/app/config
+    environment:
+      - NODE_ENV=production

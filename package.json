@@ -1,0 +1,21 @@
+{
+  "name": "musicripper-gui",
+  "version": "1.0.0",
+  "description": "A self-hostable GUI for downloading music using yt-dlp",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "build-frontend": "cd frontend && npm install && npm run build && rm -rf ../public && mkdir ../public && cp -r dist/* ../public/",
+    "postinstall": "npm run build-frontend"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "music-metadata": "^7.12.3",
+    "node-id3": "^0.2.6",
+    "axios": "^1.5.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
