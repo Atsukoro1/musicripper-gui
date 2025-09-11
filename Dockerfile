@@ -38,11 +38,11 @@ COPY package*.json ./
 # Install backend dependencies
 RUN npm ci --only=production
 
-# Copy frontend build from previous stage
-COPY --from=frontend-build /app/frontend/dist ./public/
-
 # Copy app source
 COPY . .
+
+# Build frontend
+RUN npm run build-frontend
 
 # Create downloads directory
 RUN mkdir -p downloads
