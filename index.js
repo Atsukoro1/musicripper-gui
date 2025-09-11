@@ -14,6 +14,9 @@ const config = {
   musicbrainz: {
     userAgent: process.env.MUSICBRAINZ_USER_AGENT || 'MusicRipper-GUI/1.0 ( https://github.com/your-username/musicripper-gui )'
   },
+  lastfm: {
+    apiKey: process.env.LASTFM_API_KEY || null
+  },
   downloadDir: process.env.DOWNLOAD_DIR || './downloads',
   allowedOrigins: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []
 };
@@ -174,6 +177,53 @@ async function embedLyrics(filePath, lyrics) {
   } catch (error) {
     console.error('Error embedding lyrics:', error.message);
     return false;
+  }
+}
+
+// Function to search Last.fm for metadata
+async function searchLastFm(artist, title) {
+  try {
+    // Check if Last.fm API key is configured
+    if (!config.lastfm.apiKey) {
+      console.log('Last.fm API key not configured');
+      return null;
+    }
+    
+    // Sanitize inputs for URL
+    const sanitizedArtist = encodeURIComponent(artist);
+    const sanitizedTitle = encodeURIComponent(title);
+    
+    // Last.fm API search
+    const response = await axios.get(`http://ws.audioscrobbler.com/2.0/`, {
+      params: {
+        method: 'track.getInfo',
+        api_key: config.lastfm.apiKey,
+        artist: sanitizedArtist,
+        track: sanitizedTitle,
+        format: 'json'
+      }
+    });
+    
+    // Check if we have results
+    if (response.data && response.data.track) {
+      const track = response.data.track;
+      
+      return {
+        artist: track.artist ? track.artist.name : artist,
+        title: track.name || title,
+        album: track.album ? track.album.title : null,
+        year: track.album && track.album.wiki ? new Date(track.album.wiki.published).getFullYear() : null,
+        genre: track.toptags && track.toptags.tag && track.toptags.tag.length > 0 
+          ? track.toptags.tag[0].name 
+          : null,
+        duration: track.duration ? Math.round(track.duration / 1000) : null // Convert from ms to seconds
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Last.fm search error:', error.message);
+    return null;
   }
 }
 
@@ -416,15 +466,177 @@ app.post('/api/transfer', async (req, res) => {
   }
 });
 
-// Get downloaded files
+// Get downloaded files with pagination and metadata
 app.get('/api/files', async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    
     const downloadDir = path.join(__dirname, 'downloads');
     await fs.mkdir(downloadDir, { recursive: true });
     const files = await fs.readdir(downloadDir);
-    res.json({ files });
+    
+    // Filter for audio files only
+    const audioFiles = files.filter(file => 
+      file.endsWith('.mp3') || file.endsWith('.flac') || file.endsWith('.m4a') || file.endsWith('.wav') ||
+      file.endsWith('.aac') || file.endsWith('.ogg') || file.endsWith('.wma')
+    );
+    
+    // Paginate results
+    const paginatedFiles = audioFiles.slice(offset, offset + limit);
+    
+    // Get metadata for each file
+    const filesWithMetadata = [];
+    for (const file of paginatedFiles) {
+      try {
+        const filePath = path.join(downloadDir, file);
+        const metadata = await mm.parseFile(filePath);
+        filesWithMetadata.push({
+          name: file,
+          metadata: {
+            title: metadata.common.title || file.replace(/\.[^/.]+$/, ""),
+            artist: metadata.common.artist || 'Unknown Artist',
+            album: metadata.common.album || 'Unknown Album',
+            year: metadata.common.year || 'Unknown Year',
+            genre: metadata.common.genre ? metadata.common.genre[0] : 'Unknown Genre',
+            duration: metadata.format.duration ? Math.round(metadata.format.duration) : 0
+          }
+        });
+      } catch (metadataError) {
+        // If metadata parsing fails, return basic file info
+        filesWithMetadata.push({
+          name: file,
+          metadata: {
+            title: file.replace(/\.[^/.]+$/, ""),
+            artist: 'Unknown Artist',
+            album: 'Unknown Album',
+            year: 'Unknown Year',
+            genre: 'Unknown Genre',
+            duration: 0
+          }
+        });
+      }
+    }
+    
+    res.json({
+      files: filesWithMetadata,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(audioFiles.length / limit),
+        totalFiles: audioFiles.length,
+        hasNext: page < Math.ceil(audioFiles.length / limit),
+        hasPrev: page > 1
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to list files', details: error.message });
+  }
+});
+
+// Update metadata for a file
+app.put('/api/files/:filename/metadata', async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const { title, artist, album, year, genre } = req.body;
+    
+    // Security check to prevent directory traversal
+    if (filename.includes('../') || filename.includes('..\\')) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+    
+    const filePath = path.join(__dirname, 'downloads', filename);
+    
+    // Verify file exists
+    try {
+      await fs.access(filePath);
+    } catch {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    // Read existing metadata
+    const existingTags = await NodeID3.Promise.read(filePath);
+    
+    // Update tags with new values
+    const tags = {
+      ...existingTags,
+      title: title || existingTags.title,
+      artist: artist || existingTags.artist,
+      album: album || existingTags.album,
+      year: year || existingTags.year,
+      genre: genre || existingTags.genre
+    };
+    
+    // Write updated metadata
+    await NodeID3.Promise.write(tags, filePath);
+    
+    res.json({ success: true, message: 'Metadata updated successfully' });
+  } catch (error) {
+    console.error('Metadata update error:', error);
+    res.status(500).json({ error: 'Failed to update metadata', details: error.message });
+  }
+});
+
+// Import metadata from Last.fm for a file
+app.post('/api/files/:filename/import-lastfm', async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    
+    // Security check to prevent directory traversal
+    if (filename.includes('../') || filename.includes('..\\')) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+    
+    const filePath = path.join(__dirname, 'downloads', filename);
+    
+    // Verify file exists
+    try {
+      await fs.access(filePath);
+    } catch {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    // Check if Last.fm API key is configured
+    if (!config.lastfm.apiKey) {
+      return res.status(400).json({ error: 'Last.fm API key not configured' });
+    }
+    
+    // Read existing metadata
+    const metadata = await mm.parseFile(filePath);
+    const artist = metadata.common.artist || 'Unknown Artist';
+    const title = metadata.common.title || filename.replace(/\.[^/.]+$/, "");
+    
+    // Search Last.fm for metadata
+    const lastFmData = await searchLastFm(artist, title);
+    
+    if (!lastFmData) {
+      return res.status(404).json({ error: 'No metadata found on Last.fm' });
+    }
+    
+    // Read existing ID3 tags
+    const existingTags = await NodeID3.Promise.read(filePath);
+    
+    // Merge with Last.fm data
+    const tags = {
+      ...existingTags,
+      title: lastFmData.title || existingTags.title,
+      artist: lastFmData.artist || existingTags.artist,
+      album: lastFmData.album || existingTags.album,
+      year: lastFmData.year || existingTags.year,
+      genre: lastFmData.genre || existingTags.genre
+    };
+    
+    // Write updated metadata
+    await NodeID3.Promise.write(tags, filePath);
+    
+    res.json({ 
+      success: true, 
+      message: 'Metadata imported from Last.fm successfully',
+      metadata: lastFmData
+    });
+  } catch (error) {
+    console.error('Last.fm import error:', error);
+    res.status(500).json({ error: 'Failed to import metadata from Last.fm', details: error.message });
   }
 });
 
