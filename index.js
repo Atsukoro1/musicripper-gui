@@ -653,6 +653,138 @@ app.get('/downloads/:filename', (req, res) => {
   }
 });
 
+// Serve thumbnail for a file
+app.get('/api/thumbnails/:filename', async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    
+    // Security check to prevent directory traversal
+    if (filename.includes('../') || filename.includes('..\\')) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+    
+    const filePath = path.join(__dirname, 'downloads', filename);
+    
+    // Verify file exists
+    try {
+      await fs.access(filePath);
+    } catch {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    // Check if it's an image file (extracted thumbnail)
+    if (filename.endsWith('.jpg') || filename.endsWith('.jpeg') || 
+        filename.endsWith('.png') || filename.endsWith('.webp')) {
+      // Serve image file directly
+      res.sendFile(filePath);
+      return;
+    }
+    
+    // For audio files, try to extract embedded thumbnail
+    const metadata = await mm.parseFile(filePath);
+    
+    // Check if there's an embedded thumbnail
+    if (metadata.common.picture && metadata.common.picture.length > 0) {
+      const picture = metadata.common.picture[0];
+      
+      // Set appropriate content type
+      if (picture.format) {
+        res.set('Content-Type', picture.format);
+      } else {
+        res.set('Content-Type', 'image/jpeg');
+      }
+      
+      // Send the image data
+      res.send(picture.data);
+      return;
+    }
+    
+    // No embedded thumbnail found
+    res.status(404).json({ error: 'No embedded thumbnail found' });
+  } catch (error) {
+    console.error('Thumbnail serving error:', error);
+    res.status(500).json({ error: 'Failed to serve thumbnail', details: error.message });
+  }
+});
+
+// Search for music files
+app.get('/api/search', async (req, res) => {
+  try {
+    const query = req.query.q || '';
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    
+    const downloadDir = path.join(__dirname, 'downloads');
+    await fs.mkdir(downloadDir, { recursive: true });
+    const files = await fs.readdir(downloadDir);
+    
+    // Filter for audio files only
+    const audioFiles = files.filter(file => 
+      file.endsWith('.mp3') || file.endsWith('.flac') || file.endsWith('.m4a') || file.endsWith('.wav') ||
+      file.endsWith('.aac') || file.endsWith('.ogg') || file.endsWith('.wma')
+    );
+    
+    // If there's a search query, filter the files
+    let filteredFiles = audioFiles;
+    if (query) {
+      filteredFiles = audioFiles.filter(file => {
+        // Case insensitive search in filename
+        return file.toLowerCase().includes(query.toLowerCase());
+      });
+    }
+    
+    // Paginate results
+    const paginatedFiles = filteredFiles.slice(offset, offset + limit);
+    
+    // Get metadata for each file
+    const filesWithMetadata = [];
+    for (const file of paginatedFiles) {
+      try {
+        const filePath = path.join(downloadDir, file);
+        const metadata = await mm.parseFile(filePath);
+        filesWithMetadata.push({
+          name: file,
+          metadata: {
+            title: metadata.common.title || file.replace(/\.[^/.]+$/, ""),
+            artist: metadata.common.artist || 'Unknown Artist',
+            album: metadata.common.album || 'Unknown Album',
+            year: metadata.common.year || 'Unknown Year',
+            genre: metadata.common.genre ? metadata.common.genre[0] : 'Unknown Genre',
+            duration: metadata.format.duration ? Math.round(metadata.format.duration) : 0
+          }
+        });
+      } catch (metadataError) {
+        // If metadata parsing fails, return basic file info
+        filesWithMetadata.push({
+          name: file,
+          metadata: {
+            title: file.replace(/\.[^/.]+$/, ""),
+            artist: 'Unknown Artist',
+            album: 'Unknown Album',
+            year: 'Unknown Year',
+            genre: 'Unknown Genre',
+            duration: 0
+          }
+        });
+      }
+    }
+    
+    res.json({
+      files: filesWithMetadata,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(filteredFiles.length / limit),
+        totalFiles: filteredFiles.length,
+        hasNext: page < Math.ceil(filteredFiles.length / limit),
+        hasPrev: page > 1
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to search files', details: error.message });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`MusicRipper GUI listening at http://0.0.0.0:${PORT}`);
 });

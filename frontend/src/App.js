@@ -25,6 +25,9 @@ const App = () => {
     hasPrev: false
   });
   
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  
   // Transfer state
   const [showTransferForm, setShowTransferForm] = useState(false);
   const [serverUser, setServerUser] = useState('');
@@ -34,14 +37,18 @@ const App = () => {
   const [isTransferring, setIsTransferring] = useState(false);
   const [transferStatus, setTransferStatus] = useState('');
 
-  // Fetch downloaded files on component mount and when page changes
+  // Fetch downloaded files on component mount and when page/search changes
   useEffect(() => {
     fetchDownloadedFiles();
-  }, [pagination.currentPage]);
+  }, [pagination.currentPage, searchQuery]);
 
   const fetchDownloadedFiles = async () => {
     try {
-      const response = await fetch(`/api/files?page=${pagination.currentPage}&limit=10`);
+      const baseUrl = searchQuery 
+        ? `/api/search?q=${encodeURIComponent(searchQuery)}`
+        : `/api/files`;
+        
+      const response = await fetch(`${baseUrl}&page=${pagination.currentPage}&limit=10`);
       const data = await response.json();
       setDownloadedFiles(data.files || []);
       setPagination(data.pagination || {
@@ -515,6 +522,44 @@ const App = () => {
 
         <section className="files-section">
           <h2><i className="fas fa-file-audio"></i> Downloaded Files</h2>
+          
+          {/* Search bar */}
+          <div className="search-bar">
+            <input
+              type="text"
+              placeholder="Search music files..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  setPagination({...pagination, currentPage: 1});
+                  fetchDownloadedFiles();
+                }
+              }}
+            />
+            <button 
+              onClick={() => {
+                setPagination({...pagination, currentPage: 1});
+                fetchDownloadedFiles();
+              }}
+              className="search-button"
+            >
+              <i className="fas fa-search"></i> Search
+            </button>
+            {searchQuery && (
+              <button 
+                onClick={() => {
+                  setSearchQuery('');
+                  setPagination({...pagination, currentPage: 1});
+                  fetchDownloadedFiles();
+                }}
+                className="clear-search-button"
+              >
+                <i className="fas fa-times"></i> Clear
+              </button>
+            )}
+          </div>
+          
           {downloadedFiles.length > 0 ? (
             <>
               <div className="files-list">
@@ -571,7 +616,18 @@ const App = () => {
                     ) : (
                       <>
                         <div className="file-info">
-                          <i className="fas fa-music"></i>
+                          <div className="thumbnail-container">
+                            <img 
+                              src={`/api/thumbnails/${file.name}`} 
+                              alt="Thumbnail" 
+                              className="file-thumbnail"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                e.target.nextSibling.style.display = 'flex';
+                              }}
+                            />
+                            <i className="fas fa-music thumbnail-placeholder"></i>
+                          </div>
                           <div className="file-details">
                             <span className="file-name">{file.metadata.title}</span>
                             <span className="file-artist">{file.metadata.artist}</span>

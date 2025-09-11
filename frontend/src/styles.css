@@ -55,6 +55,57 @@ body {
   gap: 10px;
 }
 
+.search-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.search-bar input {
+  flex: 1;
+  padding: 12px 15px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s;
+}
+
+.search-bar input:focus {
+  border-color: #ff416c;
+  outline: none;
+}
+
+.search-button, .clear-search-button {
+  background: linear-gradient(90deg, #ff416c, #ff4b2b);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  font-size: 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.clear-search-button {
+  background: linear-gradient(90deg, #6c757d, #adb5bd);
+}
+
+.search-button:hover, .clear-search-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(255, 65, 108, 0.4);
+}
+
+.search-button:disabled, .clear-search-button:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .download-form, .transfer-form {
   background: #f8f9fa;
   padding: 25px;
@@ -194,6 +245,32 @@ input[type="text"]:disabled, select:disabled {
   align-items: center;
   flex: 1;
   gap: 15px;
+}
+
+.thumbnail-container {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  border-radius: 5px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.file-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbnail-placeholder {
+  width: 100%;
+  height: 100%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+  color: #999;
+  font-size: 1.5rem;
 }
 
 .file-details {
